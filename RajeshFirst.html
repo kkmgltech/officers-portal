@@ -9,9 +9,8 @@
   <script>
     // ---- CONFIG ----
     const AGENT = "Rajesh I";
-    // Main data endpoint (same deployment as Manoj's page, as requested).
-    // WARNING: if this script does not filter by agent on the server, this page will show Manoj's files.
-    const MAIN_URL = "https://script.google.com/macros/s/AKfycbwaVxpcAzitM0I0XAObNUFW2fOMA97f5ucYDg0PFkTG4O2CnLN-uJ0xjYnmlDGuuRsx/exec";
+    // Rajesh's own main script (filters Rajesh I + "File Transfer" on the server)
+    const MAIN_URL = "https://script.google.com/macros/s/AKfycbz7oni-dCMDZ4oAR7mRL_K3nyvrn9L0XGUTRCjV-9qP5xHlAcc3wnhjQA8ssorQPmPVnA/exec";
     const STAMPS_URL = "https://script.google.com/macros/s/AKfycbw2gYLKIhKTZFxsJyl_g8IuSrYJQ9znTvWzU6_a6Tyud7N8DjeB3DxaKhpLBDlXUAeSFw/exec?agent=" + encodeURIComponent(AGENT);
     const DOCS_URL = "https://script.google.com/macros/s/AKfycbwQuGrQ84jWVagYfRFBFIooBJDmisU1jlw4ekttv5n_7_LDR8BIbpYJ23QLDKrHwp63iA/exec?agent=" + encodeURIComponent(AGENT);
 
@@ -253,46 +252,53 @@
       }
     }
 
-    function markAsDone(uid, button) {
+    // Sends an action to the Apps Script and waits for its real reply.
+    // text/plain avoids the CORS preflight, so the JSON response can be read.
+    async function postAction(payload) {
+      const res = await fetch(MAIN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      const out = await res.json();
+      if (out.status !== "success") throw new Error(out.message || "Save failed");
+      return out;
+    }
+
+    async function markAsDone(uid, button) {
       button.innerHTML = `<span class="loader"></span>`;
       button.disabled = true;
-
-      fetch(MAIN_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: uid, action: "done" })
-      });
-
-      setTimeout(() => {
+      try {
+        await postAction({ uid: uid, action: "done" });
         button.innerHTML = "✔ Done";
         button.classList.replace("bg-green-600", "bg-gray-400");
         button.classList.add("cursor-not-allowed");
-        button.disabled = true;
-      }, 2000);
+      } catch (err) {
+        button.innerHTML = "Mark Done";
+        button.disabled = false;
+        alert("Not saved: " + err.message);
+      }
     }
 
-    function updateRemark(uid, button) {
-      const remark = document.getElementById(`remark-${uid}`).value;
+    async function updateRemark(uid, button) {
+      const input = document.getElementById(`remark-${uid}`);
       const confirmMessage = document.getElementById(`confirm-${uid}`);
+      const remark = input.value.trim();
+      if (!remark) { input.focus(); return; }
+
       button.innerHTML = `<span class="loader"></span>`;
       button.disabled = true;
-
-      fetch(MAIN_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: uid, action: "remark", remark: remark })
-      });
-
-      setTimeout(() => {
-        button.innerHTML = "✔ Updated";
-        button.classList.replace("bg-blue-600", "bg-gray-400");
-        button.classList.add("cursor-not-allowed");
-        button.disabled = true;
+      try {
+        await postAction({ uid: uid, action: "remark", remark: remark });
+        input.value = "";
         confirmMessage.classList.remove("hidden");
         setTimeout(() => confirmMessage.classList.add("hidden"), 2000);
-      }, 2000);
+      } catch (err) {
+        alert("Not saved: " + err.message);
+      } finally {
+        button.innerHTML = "Update";
+        button.disabled = false;
+      }
     }
   </script>
 
